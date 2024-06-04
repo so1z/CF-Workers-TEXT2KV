@@ -35,6 +35,7 @@ export default {
 			// Check if the provided token matches mytoken
 			if (token === mytoken) {
 				const 文件名 = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+				console.log(`文件名: ${文件名}`);
 
 				if (文件名 == "config" || 文件名 == mytoken) {
 					const html = configHTML(url.hostname, token);
@@ -61,10 +62,17 @@ export default {
 					// Get 'text' and 'b64' from URL query parameters, if not present assign them as "null"
 					const text = url.searchParams.get('text') || "null";
 					const b64 = url.searchParams.get('b64') || "null";
+					console.log(`text: ${text}, b64: ${b64}`);
 
 					// If both 'text' and 'b64' are "null", read and return the file content from KV
 					if (text === "null" && b64 === "null") {
 						const value = await KV.get(文件名);
+						if (value === null) {
+							return new Response('文件未找到', {
+								status: 404,
+								headers: { 'content-type': 'text/plain; charset=utf-8' },
+							});
+						}
 						console.log(`Retrieved value from KV for ${文件名}: ${value}`);
 						return new Response(value, {
 							status: 200,
@@ -72,7 +80,8 @@ export default {
 						});
 					} else {
 						// Check if the file exists
-						await fileExists(KV, 文件名);
+						const exists = await fileExists(KV, 文件名);
+						console.log(`File exists: ${exists}`);
 
 						// If 'b64' is "null", write the file in plain text, if 'text' is "null", write the file in base64
 						if (b64 === "null") {
@@ -142,15 +151,25 @@ export default {
 
 // Define an async function named fileExists to check if the file exists by querying the KV for a value corresponding to the filename
 async function fileExists(KV, filename) {
-	const value = await KV.get(filename);
-	return value !== null;
+	try {
+		const value = await KV.get(filename);
+		return value !== null;
+	} catch (error) {
+		console.error('Error checking file existence:', error);
+		throw new Error('Error checking file existence');
+	}
 }
 
 // Define a function named base64Decode to convert a base64 encoded string to a utf-8 encoded character
 function base64Decode(str) {
-	const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
-	const decoder = new TextDecoder('utf-8');
-	return decoder.decode(bytes);
+	try {
+		const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+		const decoder = new TextDecoder('utf-8');
+		return decoder.decode(bytes);
+	} catch (error) {
+		console.error('Error decoding base64:', error);
+		throw new Error('Error decoding base64');
+	}
 }
 
 function 空格替换加号(str) {
@@ -178,7 +197,7 @@ function 下载bat(域名, token) {
 		`rem 构造带有文件名和内容作为参数的URL`,
 		`set "URL=https://%DOMAIN%/%FILENAME%?token=%TOKEN%^&b64=%BASE64_TEXT%"`,
 		``,
-		`rem 显示请求的响应 `,
+		`rem 显示请求的响应`,
 		`rem powershell -Command "(Invoke-WebRequest -Uri '%URL%').Content"`,
 		`start %URL%`,
 		`endlocal`,
