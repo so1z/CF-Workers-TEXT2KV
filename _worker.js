@@ -5,10 +5,8 @@ export default {
     try {
       myToken = env.TOKEN || myToken;
 
-      let KV;
-      if (env.KV) {
-        KV = env.KV;
-      } else {
+      const KV = env.KV;
+      if (!KV) {
         return new Response('KV 命名空间未绑定', {
           status: 400,
           headers: { 'content-type': 'text/plain; charset=utf-8' },
@@ -40,6 +38,13 @@ export default {
           return new Response(generateShScript(url.hostname, token), {
             headers: {
               "Content-Disposition": `attachment; filename=update.sh`,
+              "content-type": "text/plain; charset=utf-8",
+            },
+          });
+        } else if (filename === "config/update_mac.sh") {
+          return new Response(generateMacShScript(url.hostname, token), {
+            headers: {
+              "Content-Disposition": `attachment; filename=update_mac.sh`,
               "content-type": "text/plain; charset=utf-8",
             },
           });
@@ -107,11 +112,6 @@ export default {
   }
 };
 
-async function checkFileExists(KV, filename) {
-  const value = await KV.get(filename);
-  return value !== null;
-}
-
 function decodeBase64(str) {
   const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
   const decoder = new TextDecoder('utf-8');
@@ -163,6 +163,23 @@ echo "更新数据完成"
 `;
 }
 
+function generateMacShScript(domain, token) {
+  return `#!/bin/bash
+export LANG=zh_CN.UTF-8
+DOMAIN="${domain}"
+TOKEN="${token}"
+if [ -n "$1" ]; then 
+  FILENAME="$1"
+else
+  echo "无文件名"
+  exit 1
+fi
+BASE64_TEXT=$(head -n 65 $FILENAME | base64)
+curl -k "https://$DOMAIN/$FILENAME?token=$TOKEN&b64=$BASE64_TEXT"
+echo "更新数据完成"
+`;
+}
+
 function generateConfigHTML(domain, token) {
   return `
     <html>
@@ -170,27 +187,4 @@ function generateConfigHTML(domain, token) {
         <title>CF-Workers-TEXT2KV</title>
       </head>
       <body>
-        <h1 class="centered">CF-Workers-TEXT2KV 配置信息</h1>
-        <p class="centered">
-        服务域名: ${domain} <br>
-        token: ${token} <br>
-        <br>
-        <pre>注意! 因URL长度内容所限，脚本更新方式一次最多更新65行内容</pre><br>
-        Windows脚本: <button type="button" onclick="window.open('https://${domain}/config/update.bat?token=${token}', '_blank')">点击下载</button>
-        <br>
-        <pre>使用方法: <code>&lt;update.bat&nbsp;ip.txt&gt;</code></pre>
-        <br>
-        Linux脚本: 
-        <code>&lt;curl&nbsp;https://${domain}/config/update.sh?token=${token}&nbsp;-o&nbsp;update.sh&nbsp;&&&nbsp;chmod&nbsp;+x&nbsp;update.sh&gt;</code><br>
-        <pre>使用方法: <code>&lt;./update.sh&nbsp;ip.txt&gt;</code></pre><br>
-        <br>
-        在线文档查询: <br>
-        https://${domain}/<input type="text" name="keyword" placeholder="请输入要查询的文档">?token=${token}    
-        <button type="button" onclick="window.open('https://${domain}/' + document.querySelector('input[name=keyword]').value + '?token=${token}', '_blank')">查看文档内容</button>
-        <button type="button" onclick="navigator.clipboard.writeText('https://${domain}/' + document.querySelector('input[name=keyword]').value + '?token=${token}')">复制文档地址</button>
-        </p>
-    <br>
-      </body>
-    </html>
-  `;
-}
+        <h1 class="cen
