@@ -2,110 +2,105 @@ let myToken = 'passwd';
 
 export default {
   async fetch(request, env) {
-    myToken = env.TOKEN || myToken;
+    try {
+      myToken = env.TOKEN || myToken;
 
-    let KV;
-    if (env.KV) {
-      KV = env.KV;
-    } else {
-      return new Response('KV 命名空间未绑定', {
-        status: 400,
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
-      });
-    }
-
-    const url = new URL(request.url);
-    let token;
-    if (url.pathname === `/${myToken}`) {
-      token = myToken;
-    } else {
-      token = url.searchParams.get('token') || "null";
-    }
-
-    if (token === myToken) {
-      const filename = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-
-      if (filename == "config" || filename == myToken) {
-        const html = generateConfigHTML(url.hostname, token);
-        return new Response(html, {
-          headers: { 'Content-Type': 'text/html; charset=UTF-8' },
-        });
-      } else if (filename == "config/update.bat") {
-        return new Response(generateBatScript(url.hostname, token), {
-          headers: {
-            "Content-Disposition": `attachment; filename=update.bat`,
-            "content-type": "text/plain; charset=utf-8",
-          },
-        });
-      } else if (filename == "config/update.sh") {
-        return new Response(generateShScript(url.hostname, token), {
-          headers: {
-            "Content-Disposition": `attachment; filename=update.sh`,
-            "content-type": "text/plain; charset=utf-8",
-          },
-        });
+      let KV;
+      if (env.KV) {
+        KV = env.KV;
       } else {
-        const text = url.searchParams.get('text') || "null";
-        const b64 = url.searchParams.get('b64') || "null";
+        return new Response('KV 命名空间未绑定', {
+          status: 400,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        });
+      }
 
-        if (text === "null" && b64 === "null") {
-          const value = await KV.get(filename);
-          return new Response(value, {
-            status: 200,
-            headers: { 'content-type': 'text/plain; charset=utf-8' },
+      const url = new URL(request.url);
+      let token = url.searchParams.get('token') || "null";
+      if (url.pathname === `/${myToken}`) {
+        token = myToken;
+      }
+
+      if (token === myToken) {
+        const filename = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+
+        if (filename === "config" || filename === myToken) {
+          const html = generateConfigHTML(url.hostname, token);
+          return new Response(html, {
+            headers: { 'Content-Type': 'text/html; charset=UTF-8' },
+          });
+        } else if (filename === "config/update.bat") {
+          return new Response(generateBatScript(url.hostname, token), {
+            headers: {
+              "Content-Disposition": `attachment; filename=update.bat`,
+              "content-type": "text/plain; charset=utf-8",
+            },
+          });
+        } else if (filename === "config/update.sh") {
+          return new Response(generateShScript(url.hostname, token), {
+            headers: {
+              "Content-Disposition": `attachment; filename=update.sh`,
+              "content-type": "text/plain; charset=utf-8",
+            },
           });
         } else {
-          await checkFileExists(KV, filename);
+          const text = url.searchParams.get('text') || "null";
+          const b64 = url.searchParams.get('b64') || "null";
 
-          if (b64 === "null") {
-            await KV.put(filename, text);
-            return new Response(text, {
+          if (text === "null" && b64 === "null") {
+            const value = await KV.get(filename);
+            return new Response(value, {
               status: 200,
               headers: { 'content-type': 'text/plain; charset=utf-8' },
             });
-          } else if (text === "null") {
-            const decodedContent = decodeBase64(replaceSpacesWithPlus(b64));
-            await KV.put(filename, decodedContent);
-            return new Response(decodedContent, {
+          } else {
+            const content = b64 !== "null" ? decodeBase64(replaceSpacesWithPlus(b64)) : text;
+            await KV.put(filename, content);
+            return new Response(content, {
               status: 200,
               headers: { 'content-type': 'text/plain; charset=utf-8' },
             });
           }
         }
+      } else if (url.pathname === "/") {
+        return new Response(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Welcome to nginx!</title>
+          <style>
+            body {
+              width: 35em;
+              margin: 0 auto;
+              font-family: Tahoma, Verdana, Arial, sans-serif;
+            }
+          </style>
+          </head>
+          <body>
+          <h1>Welcome to nginx!</h1>
+          <p>If you see this page, the nginx web server is successfully installed and
+          working. Further configuration is required.</p>
+          
+          <p>For online documentation and support please refer to
+          <a href="http://nginx.org/">nginx.org</a>.<br/>
+          Commercial support is available at
+          <a href="http://nginx.com/">nginx.com</a>.</p>
+          
+          <p><em>Thank you for using nginx.</em></p>
+          </body>
+          </html>
+        `, {
+          headers: { 'Content-Type': 'text/html; charset=UTF-8' },
+        });
+      } else {
+        return new Response('token 有误', {
+          status: 400,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        });
       }
-    } else if (url.pathname == "/") {
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <title>Welcome to nginx!</title>
-        <style>
-          body {
-            width: 35em;
-            margin: 0 auto;
-            font-family: Tahoma, Verdana, Arial, sans-serif;
-          }
-        </style>
-        </head>
-        <body>
-        <h1>Welcome to nginx!</h1>
-        <p>If you see this page, the nginx web server is successfully installed and
-        working. Further configuration is required.</p>
-        
-        <p>For online documentation and support please refer to
-        <a href="http://nginx.org/">nginx.org</a>.<br/>
-        Commercial support is available at
-        <a href="http://nginx.com/">nginx.com</a>.</p>
-        
-        <p><em>Thank you for using nginx.</em></p>
-        </body>
-        </html>
-      `, {
-        headers: { 'Content-Type': 'text/html; charset=UTF-8' },
-      });
-    } else {
-      return new Response('token 有误', {
-        status: 400,
+    } catch (e) {
+      return new Response(`Worker Error: ${e.message}`, {
+        status: 500,
         headers: { 'content-type': 'text/plain; charset=utf-8' },
       });
     }
